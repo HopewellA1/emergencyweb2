@@ -1,0 +1,32 @@
+[
+    {
+        'userId': 'hZ3OFovYQEXXXSue31jfy06zPXy1',
+        'locationAddress': '-29.74091689130987,
+        31.001983032050298', 'riskScore': 5,
+        'priority': 'critical',
+        'timestamp': '2026-05-13T03:32:31.921000+00:00',
+         'updates':
+            [
+                {
+                    'message': 'Alert sent to dispatch',
+                    'status': 'open',
+                    'timestamp': '2026-05-13T05:32:31.921'
+                }
+            ],
+            'description': 'Emergency SOS alert from citizen',
+            'incidentType': 'Fire',
+            'location': {
+                'lat': -29.74091689130987,
+                'lng': 31.001983032050298
+            },
+            'userEmail': 'hopewellsitshaka@gmail.com',
+            'assignedResponder': None,
+            'status': 'open',
+            'id': 'tifLCrIz6FkytmOhoSyd'
+    }, 
+    {
+        'priority': 'critical',
+        'description': 'Emergency SOS alert from citizen',
+        'acceptedAt': '2026-05-12T18:38:02.095000+00:00',
+        'assignedResponder': '32WUbjnRQ3bqD6WZR3VqA8rpimO2',
+        'userId': 'hZ3OFovYQEXXXSue31jfy06zPXy1', 'locationAddress': '-29.74099207991492, 31.002105000000004', 'riskScore': 4, 'updates': [{'message': 'Alert sent to dispatch', 'status': 'open', 'timestamp': '2026-05-12T20:36:56.469'}], 'timestamp': '2026-05-12T18:36:56.469000+00:00', 'responderLocation': {'lat': -29.740995, 'lng': 31.002105000000004, 'timestamp': '2026-05-12T18:40:35.580000+00:00'}, 'incidentType': 'Crime', 'location': {'lat': -29.74099207991492, 'lng': 31.002105000000004}, 'userEmail': 'hopewellsitshaka@gmail.com', 'responderName': 'Responder', 'status': 'inProgress', 'id': 'zAxKwJaRwSIshCIN0ijq'}]

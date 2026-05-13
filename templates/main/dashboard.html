@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RapidGuard — Live Location</title>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <!-- Leaflet CSS + JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #080810; color: #fff; font-family: 'Courier New', monospace; min-height: 100vh; }
+
+        header {
+            height: 56px; border-bottom: 1px solid #1a1a2a;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; position: relative; z-index: 1000;
+        }
+        .logo { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; letter-spacing: 2px; }
+        .logo-icon { width: 32px; height: 32px; background: #ff3b30; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 0 16px #ff3b3066; }
+        .header-nav { display: flex; gap: 8px; align-items: center; }
+        .nav-btn { background: #0e0e1a; border: 1px solid #1a1a2a; color: #666; padding: 6px 14px; border-radius: 8px; font-size: 11px; cursor: pointer; font-family: inherit; letter-spacing: 1px; text-transform: uppercase; text-decoration: none; transition: all 0.15s; }
+        .nav-btn:hover { border-color: #ff3b30; color: #ff3b30; }
+        .status { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #555; letter-spacing: 1px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; }
+        .status-dot.connected { background: #30d158; box-shadow: 0 0 8px #30d158; animation: breathe 2s ease-in-out infinite; }
+        @keyframes breathe { 0%,100% { opacity:1; } 50% { opacity:.6; } }
+
+        .layout { display: flex; gap: 16px; padding: 16px; height: calc(100vh - 56px); }
+        .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .stat-card { background: #0e0e1a; border: 1px solid #1a1a2a; border-radius: 12px; padding: 14px 16px; }
+        .stat-value { font-size: 26px; font-weight: 800; letter-spacing: -1px; }
+        .stat-label { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
+
+        .panel { background: #0e0e1a; border: 1px solid #1a1a2a; border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+        .panel-header { padding: 12px 16px; border-bottom: 1px solid #1a1a2a; font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1.5px; flex-shrink: 0; }
+        .panel-body { overflow-y: auto; flex: 1; }
+        .user-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #12121e; cursor: pointer; transition: background 0.15s; }
+        .user-row:hover { background: #12121e; }
+        .user-avatar { width: 32px; height: 32px; background: #1a1a2a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+        .user-name { font-size: 12px; font-weight: 600; color: #fff; }
+        .user-coords { font-size: 10px; color: #444; margin-top: 2px; }
+        .user-time { font-size: 10px; color: #333; margin-top: 1px; }
+        .online-badge { width: 8px; height: 8px; border-radius: 50%; background: #30d158; box-shadow: 0 0 6px #30d158; flex-shrink: 0; margin-left: auto; }
+
+        .main { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        .map-wrap { flex: 1; border-radius: 14px; border: 1px solid #1a1a2a; overflow: hidden; position: relative; }
+        #map { width: 100%; height: 100%; }
+
+        .map-controls { position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 6px; }
+        .map-btn { background: #0e0e1acc; border: 1px solid #2a2a3a; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 10px; cursor: pointer; font-family: inherit; letter-spacing: 1px; text-transform: uppercase; transition: all 0.15s; backdrop-filter: blur(4px); }
+        .map-btn:hover { background: #1a1a2a; border-color: #30d158; color: #30d158; }
+        .map-btn.active { background: #30d15820; border-color: #30d158; color: #30d158; }
+
+        .incidents-panel { height: 200px; background: #0e0e1a; border: 1px solid #1a1a2a; border-radius: 14px; display: flex; flex-direction: column; flex-shrink: 0; }
+        .incidents-header { padding: 12px 16px; border-bottom: 1px solid #1a1a2a; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .incidents-title { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1.5px; }
+        .badge { background: #ff3b3018; color: #ff3b30; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; border: 1px solid #ff3b3033; letter-spacing: 1px; display: none; }
+        .incidents-body { overflow-y: auto; flex: 1; }
+        .incident-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #12121e; }
+        .incident-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 6px #ff3b30; flex-shrink: 0; }
+        .incident-info { flex: 1; min-width: 0; }
+        .incident-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
+        .incident-type { color: #ff3b30; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+        .incident-time { color: #444; font-size: 10px; }
+        .incident-msg { color: #aaa; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .resolve-btn { background: transparent; border: 1px solid #1e1e2e; color: #555; padding: 4px 10px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+        .resolve-btn:hover { border-color: #30d158; color: #30d158; }
+        .empty { color: #333; font-size: 12px; text-align: center; padding: 20px; }
+
+        /* Map markers */
+        .custom-marker { background: #30d158; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 0 0 2px #30d15880, 0 2px 8px rgba(0,0,0,.5); }
+        .sos-marker { background: #ff3b30; width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 0 0 2px #ff3b3080; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 #ff3b3099, 0 2px 8px rgba(0,0,0,.5); } 100% { box-shadow: 0 0 0 12px transparent, 0 2px 8px rgba(0,0,0,.5); } }
+
+        /* Dark map popups */
+        .leaflet-popup-content-wrapper { background: #111520; border: 1px solid #1e2330; color: #c8c3d4; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.6); }
+        .leaflet-popup-tip { background: #111520; }
+        .leaflet-popup-content { font-family: 'Courier New', monospace; font-size: 12px; margin: 10px 14px; }
+        .leaflet-popup-close-button { color: #555 !important; }
+        .leaflet-popup-close-button:hover { color: #fff !important; }
+
+        /* Override Leaflet attribution so it looks clean on dark map */
+        .leaflet-control-attribution { background: rgba(8,8,16,.85) !important; color: #333 !important; font-size: 9px !important; }
+        .leaflet-control-attribution a { color: #444 !important; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🛡</div>
+            RAPIDGUARD — LIVE OPS
+        </div>
+        <div class="header-nav">
+            <a href="/" class="nav-btn">📍 Live Map</a>
+            <a href="/admin" class="nav-btn">⚙ Admin</a>
+        </div>
+        <div class="status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">CONNECTING</span>
+        </div>
+    </header>
+
+    <div class="layout">
+        <div class="sidebar">
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="onlineCount" style="color:#30d158">0</div>
+                    <div class="stat-label">Online</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="incidentCount" style="color:#ff3b30">0</div>
+                    <div class="stat-label">Incidents</div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Live Users</div>
+                <div class="panel-body" id="usersList"><p class="empty">No users online</p></div>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="map-wrap">
+                <div id="map"></div>
+                <div class="map-controls">
+                    <button class="map-btn active" id="btnDark"      onclick="setLayer('dark')">🌑 Dark</button>
+                    <button class="map-btn"         id="btnStreet"   onclick="setLayer('street')">🗺 Street</button>
+                    <button class="map-btn"         id="btnSatellite" onclick="setLayer('satellite')">🛰 Satellite</button>
+                    <button class="map-btn"         id="btnTopo"     onclick="setLayer('topo')">⛰ Topo</button>
+                    <button class="map-btn"         onclick="fitAll()">⊡ Fit All</button>
+                </div>
+            </div>
+            <div class="incidents-panel">
+                <div class="incidents-header">
+                    <span class="incidents-title">Active Incidents</span>
+                    <span class="badge" id="incidentBadge">0 ACTIVE</span>
+                </div>
+                <div class="incidents-body" id="incidentsList"><p class="empty">No active incidents</p></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ── Config ────────────────────────────────────────────────────────────
+        const SERVER = window.location.origin;   // auto-detects the Flask server
+
+        // ── State ─────────────────────────────────────────────────────────────
+        let userLocations = [];
+        let incidents     = [];
+        let markers       = {};
+        let incidentMarkers = {};
+
+        // ── Map setup ─────────────────────────────────────────────────────────
+        const map = L.map('map', {
+            center: [-29.8587, 31.0218],   // Durban, ZA
+            zoom: 13,
+            zoomControl: true,
+        });
+
+        /*
+         * Tile layers
+         * Dark / Street use CartoDB — crisp vector-style tiles, no API key,
+         * razor-sharp labels at all zoom levels, no "out of data" gaps.
+         * Satellite uses ESRI World Imagery (global coverage, high zoom).
+         * Topo uses OpenTopoMap.
+         */
+        const layers = {
+            dark: L.tileLayer(
+                'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                { attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>', subdomains: 'abcd', maxZoom: 20 }
+            ),
+            street: L.tileLayer(
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                { attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>', subdomains: 'abcd', maxZoom: 20 }
+            ),
+            satellite: L.layerGroup([
+                L.tileLayer(
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    { attribution: '© Esri', maxZoom: 19 }
+                ),
+                // Label overlay on top of satellite
+                L.tileLayer(
+                    'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+                    { attribution: '', subdomains: 'abcd', maxZoom: 19, pane: 'overlayPane' }
+                ),
+            ]),
+            topo: L.tileLayer(
+                'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+                { attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a>', maxZoom: 17 }
+            ),
+        };
+
+        layers.dark.addTo(map);
+
+        function setLayer(name) {
+            Object.values(layers).forEach(l => { try { map.removeLayer(l); } catch(e){} });
+            layers[name].addTo(map);
+            document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
+            const btn = document.getElementById('btn' + name.charAt(0).toUpperCase() + name.slice(1));
+            if (btn) btn.classList.add('active');
+        }
+
+        function fitAll() {
+            const pts = userLocations.filter(u => u.lat && u.lng).map(u => [u.lat, u.lng]);
+            if (pts.length > 0) map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
+        }
+
+        // ── Custom icons ──────────────────────────────────────────────────────
+        const userIcon = L.divIcon({
+            className: '',
+            html: '<div class="custom-marker"></div>',
+            iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
+        });
+        const sosIcon = L.divIcon({
+            className: '',
+            html: '<div class="sos-marker"></div>',
+            iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -12],
+        });
+
+        // ── Socket.IO ─────────────────────────────────────────────────────────
+        const socket = io(SERVER, { transports: ['websocket'] });
+
+        socket.on('connect', () => {
+            document.getElementById('statusDot').classList.add('connected');
+            document.getElementById('statusText').textContent = 'LIVE';
+        });
+        socket.on('disconnect', () => {
+            document.getElementById('statusDot').classList.remove('connected');
+            document.getElementById('statusText').textContent = 'DISCONNECTED';
+        });
+
+        socket.on('locations_update', data => { userLocations = data; renderUsers(); updateMarkers(); });
+        socket.on('incidents_update', data => { incidents = data; renderIncidents(); });
+        socket.on('new_incident',    inc  => { incidents.unshift(inc); renderIncidents(); addIncidentMarker(inc); });
+        socket.on('incident_updated', upd => {
+            incidents = incidents.map(i => i.id === upd.id ? upd : i);
+            if (upd.status === 'resolved' && incidentMarkers[upd.id]) {
+                map.removeLayer(incidentMarkers[upd.id]);
+                delete incidentMarkers[upd.id];
+            }
+            renderIncidents();
+        });
+
+        // ── Marker management ─────────────────────────────────────────────────
+        function updateMarkers() {
+            const activeIds = new Set(userLocations.map(u => u.user_id));
+            Object.keys(markers).forEach(id => {
+                if (!activeIds.has(id)) { map.removeLayer(markers[id]); delete markers[id]; }
+            });
+            userLocations.forEach(u => {
+                if (!u.lat || !u.lng) return;
+                const ll = [u.lat, u.lng];
+                if (markers[u.user_id]) {
+                    markers[u.user_id].setLatLng(ll);
+                    markers[u.user_id].getPopup().setContent(userPopup(u));
+                } else {
+                    markers[u.user_id] = L.marker(ll, { icon: userIcon })
+                        .addTo(map).bindPopup(userPopup(u));
+                }
+            });
+            const pts = userLocations.filter(u => u.lat && u.lng).map(u => [u.lat, u.lng]);
+            if (pts.length > 0) map.fitBounds(pts, { padding: [50, 50], maxZoom: 16 });
+        }
+
+        function userPopup(u) {
+            return `<b style="color:#30d158">${u.name}</b><br>
+                    <span style="color:#666">Lat:</span> ${u.lat.toFixed(6)}<br>
+                    <span style="color:#666">Lng:</span> ${u.lng.toFixed(6)}<br>
+                    <span style="color:#444">Updated: ${new Date(u.updated_at).toLocaleTimeString()}</span>`;
+        }
+
+        function addIncidentMarker(inc) {
+            if (!inc.lat || !inc.lng) return;
+            incidentMarkers[inc.id] = L.marker([inc.lat, inc.lng], { icon: sosIcon })
+                .addTo(map)
+                .bindPopup(`<b style="color:#ff3b30">${inc.type}</b><br>
+                             ${inc.message || ''}<br>
+                             <span style="color:#666">Lat:</span> ${inc.lat.toFixed(6)}<br>
+                             <span style="color:#666">Lng:</span> ${inc.lng.toFixed(6)}<br>
+                             <span style="color:#444">${new Date(inc.created_at).toLocaleTimeString()}</span>`)
+                .openPopup();
+        }
+
+        // ── Sidebar render ────────────────────────────────────────────────────
+        function renderUsers() {
+            const active = userLocations.filter(u => u.lat);
+            document.getElementById('onlineCount').textContent = active.length;
+            const list = document.getElementById('usersList');
+            if (active.length === 0) { list.innerHTML = '<p class="empty">No users online</p>'; return; }
+            list.innerHTML = active.map(u => `
+                <div class="user-row" onclick="map.flyTo([${u.lat},${u.lng}],17)">
+                    <div class="user-avatar">👤</div>
+                    <div style="flex:1;min-width:0">
+                        <div class="user-name">${u.name}</div>
+                        <div class="user-coords">${u.lat.toFixed(6)}, ${u.lng.toFixed(6)}</div>
+                        <div class="user-time">Updated: ${new Date(u.updated_at).toLocaleTimeString()}</div>
+                    </div>
+                    <div class="online-badge"></div>
+                </div>`).join('');
+        }
+
+        function renderIncidents() {
+            const active = incidents.filter(i => i.status === 'active');
+            document.getElementById('incidentCount').textContent = active.length;
+            const badge = document.getElementById('incidentBadge');
+            badge.style.display = active.length > 0 ? 'inline' : 'none';
+            badge.textContent = `${active.length} ACTIVE`;
+            const list = document.getElementById('incidentsList');
+            if (active.length === 0) { list.innerHTML = '<p class="empty">No active incidents</p>'; return; }
+            list.innerHTML = active.map(inc => `
+                <div class="incident-row">
+                    <div class="incident-dot"></div>
+                    <div class="incident-info">
+                        <div class="incident-meta">
+                            <span class="incident-type">${inc.type}</span>
+                            <span class="incident-time">${new Date(inc.created_at).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="incident-msg">${inc.message || 'No message'}</div>
+                    </div>
+                    <button class="resolve-btn" onclick="resolve('${inc.id}')">Resolve</button>
+                </div>`).join('');
+        }
+
+        async function resolve(id) {
+            await fetch(`${SERVER}/incidents/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'resolved' }),
+            });
+        }
+    </script>
+</body>
+</html>
