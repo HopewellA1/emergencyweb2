@@ -23,11 +23,11 @@ cred = credentials.Certificate({
 })
 
 firebase_admin.initialize_app(cred)
-
+import eventlet
+eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*")
-
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 # Firebase connection
 
 db = firestore.client()
@@ -124,7 +124,12 @@ def filter_incidents(incidents, status=None, priority=None, min_risk=None, unass
 # high_risk         = filter_incidents(incidents, min_risk=4)
 # urgent_unassigned = filter_incidents(incidents, status='open', priority='critical', unassigned_only=True)
 # in_progress       = filter_incidents(incidents, status='inProgress')
+# if __name__ == "__main__":
+#     threading.Thread(target=watch_incidents, daemon=True).start()
+#     socketio.run(app, host='127.0.0.1', port=5000, debug=False)
+
+
 if __name__ == "__main__":
     threading.Thread(target=watch_incidents, daemon=True).start()
-    socketio.run(app, host='127.0.0.1', port=5000, debug=False)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), allow_unsafe_werkzeug=True, debug=False)
     
